@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Мои проекты</title>
-<meta name="description" content="Учёт проектов, задач и денег.">
+<meta name="description" content="Учёт задач, клиентов и денег.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='85'>◆</text></svg>">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -15,7 +15,7 @@
     <div class="headrow">
       <div>
         <h1 data-t="title">Мои проекты</h1>
-        <p class="lead" data-t="lead">Проекты, задачи внутри них, стоимость и оплаты. Всё хранится в этом браузере.</p>
+        <p class="lead" data-t="lead">Задачи, клиенты, стоимость и оплаты. Всё хранится в этом браузере.</p>
       </div>
       <div class="headtools">
         <button type="button" class="iconbtn" id="lang">UA</button>
@@ -28,15 +28,20 @@
 
   <section class="card toolbar">
     <div class="toolrow">
-      <input type="search" id="q" class="inp grow" data-tp="search" placeholder="Поиск по проектам, клиентам, задачам">
+      <input type="search" id="q" class="inp grow" data-tp="search" placeholder="Поиск по задачам, клиентам, заметкам">
+      <button type="button" class="btn primary" id="add" data-t="add">Новая задача</button>
+    </div>
+    <div class="toolrow">
+      <select id="fclient" class="inp"></select>
+      <select id="fmonth" class="inp"></select>
       <select id="fstatus" class="inp"></select>
-      <select id="sort" class="inp"></select>
-      <button type="button" class="btn primary" id="add" data-t="add">Новый проект</button>
+      <select id="fpay" class="inp"></select>
+      <select id="group" class="inp"></select>
     </div>
     <div class="toolrow sec">
       <button type="button" class="minibtn" id="exportCsv" data-t="exportCsv">Выгрузить CSV</button>
       <button type="button" class="minibtn" id="backup" data-t="backup">Сохранить копию</button>
-      <button type="button" class="minibtn" id="restore" data-t="restore">Восстановить из копии</button>
+      <button type="button" class="minibtn" id="restore" data-t="restore">Загрузить файл</button>
       <input type="file" id="restoreFile" accept="application/json" hidden>
       <span class="hint" id="count"></span>
     </div>
@@ -46,7 +51,7 @@
 
   <section class="card empty hidden" id="empty">
     <h2 data-t="emptyH">Пока пусто</h2>
-    <p class="sub" data-t="emptyP">Нажмите «Новый проект» и добавьте первый. Или восстановите сохранённую копию.</p>
+    <p class="sub" data-t="emptyP">Нажмите «Новая задача» и добавьте первую. Или загрузите файл с данными.</p>
   </section>
 
   <footer>
@@ -57,37 +62,37 @@
 <div class="modal hidden" id="modal">
   <div class="sheet" role="dialog" aria-modal="true">
     <div class="sheethead">
-      <h2 id="mtitle" data-t="mNew">Новый проект</h2>
+      <h2 id="mtitle" data-t="mNew">Новая задача</h2>
       <button type="button" class="iconbtn" id="mclose" aria-label="Закрыть">✕</button>
     </div>
     <div class="sheetbody">
+      <label class="fld"><span data-t="fTask">Задача</span>
+        <input class="inp" id="fTask" autocomplete="off"></label>
       <div class="f2">
-        <label class="fld"><span data-t="fName">Название проекта</span>
-          <input class="inp" id="fName" autocomplete="off"></label>
         <label class="fld"><span data-t="fClient">Клиент</span>
-          <input class="inp" id="fClient" autocomplete="off"></label>
-      </div>
-      <div class="f3">
+          <input class="inp" id="fClient" list="clients" autocomplete="off">
+          <datalist id="clients"></datalist></label>
         <label class="fld"><span data-t="fStatus">Статус</span>
           <select class="inp" id="fStatus"></select></label>
-        <label class="fld"><span data-t="fStart">Начало</span>
-          <input class="inp" id="fStart" type="date"></label>
-        <label class="fld"><span data-t="fDue">Срок сдачи</span>
-          <input class="inp" id="fDue" type="date"></label>
       </div>
       <div class="f3">
-        <label class="fld"><span data-t="fPrice">Стоимость</span>
-          <input class="inp" id="fPrice" inputmode="decimal" autocomplete="off"></label>
-        <label class="fld"><span data-t="fPaid">Уже оплачено</span>
+        <label class="fld"><span data-t="fMonth">Месяц</span>
+          <input class="inp" id="fMonth" type="month"></label>
+        <label class="fld"><span data-t="fCreated">Создана</span>
+          <input class="inp" id="fCreated" type="date"></label>
+        <label class="fld"><span data-t="fDeadline">Срок</span>
+          <input class="inp" id="fDeadline" type="date"></label>
+      </div>
+      <div class="f3">
+        <label class="fld"><span data-t="fCost">Стоимость</span>
+          <input class="inp" id="fCost" inputmode="decimal" autocomplete="off"></label>
+        <label class="fld"><span data-t="fPaid">Оплачено</span>
           <input class="inp" id="fPaid" inputmode="decimal" autocomplete="off"></label>
         <label class="fld"><span data-t="fCur">Валюта</span>
           <select class="inp" id="fCur"></select></label>
       </div>
-      <label class="chk"><input type="checkbox" id="fAuto"><span data-t="fAuto">Считать стоимость по сумме задач</span></label>
-      <label class="fld"><span data-t="fLink">Ссылка</span>
-        <input class="inp" id="fLink" placeholder="https://" autocomplete="off"></label>
-      <label class="fld"><span data-t="fNote">Заметки</span>
-        <textarea class="inp" id="fNote" rows="3"></textarea></label>
+      <label class="fld"><span data-t="fNotes">Заметки</span>
+        <textarea class="inp" id="fNotes" rows="4"></textarea></label>
     </div>
     <div class="sheetfoot">
       <button type="button" class="btn danger hidden" id="mdel" data-t="del">Удалить</button>
@@ -98,7 +103,7 @@
   </div>
 </div>
 
-<script src="i18n.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="i18n.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

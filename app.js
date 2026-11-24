@@ -1,55 +1,68 @@
-/* Мои проекты — учёт проектов, задач и денег. Данные в localStorage. */
+/* Мои проекты — учёт задач, клиентов и денег. Данные в localStorage. */
 (function () {
 'use strict';
 
-const KEY = 'rita.work.v1';
+const KEY = 'rita.work.v2';
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
 
 let state = load();
 let T = I18N[state.lang] || I18N.ru;
 let openIds = {};
+let editId = null;
 
 /* ---------- хранилище ---------- */
 
-function blank() {
-  return { v: 1, lang: 'ru', theme: 'light', projects: [] };
-}
+function blank() { return { app:'my-projects', version:2, lang:'ru', theme:'light', tasks:[] }; }
+
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return blank();
     const d = JSON.parse(raw);
-    if (!d || !Array.isArray(d.projects)) return blank();
-    return { v: 1, lang: d.lang === 'uk' ? 'uk' : 'ru',
-             theme: d.theme === 'dark' ? 'dark' : 'light',
-             projects: d.projects.map(normProject) };
+    const s = fromAny(d);
+    return s || blank();
   } catch (e) { return blank(); }
 }
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
-}
-function normProject(p) {
-  p = p || {};
+/* понимает и свой формат, и выгрузку из прежнего трекера */
+function fromAny(d) {
+  if (!d || typeof d !== 'object') return null;
+  if (!Array.isArray(d.tasks)) return null;
   return {
-    id:     p.id || uid(),
-    name:   str(p.name),
-    client: str(p.client),
-    status: STATUS_ORDER.indexOf(p.status) >= 0 ? p.status : 'talks',
-    start:  str(p.start),
-    due:    str(p.due),
-    price:  num(p.price),
-    paid:   num(p.paid),
-    cur:    CURRENCIES.indexOf(p.cur) >= 0 ? p.cur : '₴',
-    auto:   !!p.auto,
-    link:   str(p.link),
-    note:   str(p.note),
-    created: p.created || Date.now(),
-    tasks: Array.isArray(p.tasks) ? p.tasks.map(t => ({
-      id: (t && t.id) || uid(), title: str(t && t.title),
-      done: !!(t && t.done), price: num(t && t.price)
-    })) : []
+    app: 'my-projects', version: 2,
+    lang:  d.lang === 'uk' ? 'uk' : 'ru',
+    theme: d.theme === 'dark' ? 'dark' : 'light',
+    tasks: d.tasks.map(normTask)
   };
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+function normTask(t) {
+  t = t || {};
+  const cur = String(t.currency || 'UAH').toUpperCase();
+  return {
+    id:       t.id || uid(),
+    task:     str(t.task || t.name || t.title),
+    client:   str(t.client),
+    month:    monthOf(t),
+    created:  dateStr(t.created),
+    deadline: dateStr(t.deadline || t.due),
+    status:   STATUS_ORDER.indexOf(t.status) >= 0 ? t.status : 'new',
+    currency: CURRENCIES[cur] ? cur : 'UAH',
+    cost:     num(t.cost != null ? t.cost : t.price),
+    paid:     num(t.paid),
+    notes:    str(t.notes != null ? t.notes : t.note)
+  };
+}
+function monthOf(t) {
+  const m = str(t.month);
+  if (/^\d{4}-\d{2}$/.test(m)) return m;
+  const c = dateStr(t.created);
+  return c ? c.slice(0, 7) : thisMonth();
+}
+function dateStr(v) {
+  const s = str(v);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
 }
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function str(v) { return v == null ? '' : String(v); }
@@ -59,40 +72,30 @@ function num(v) {
   return isFinite(n) && n > 0 ? n : 0;
 }
 
-/* ---------- деньги и даты ---------- */
+/* ---------- даты и деньги ---------- */
 
-function priceOf(p) {
-  if (!p.auto) return p.price;
-  return p.tasks.reduce((s, t) => s + t.price, 0);
+function today() { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function thisMonth() { return today().slice(0, 7); }
+function pad(n) { return n < 10 ? '0' + n : String(n); }
+function fmtDate(iso) { if (!iso) return ''; const p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
+function fmtMonth(m) {
+  if (!/^\d{4}-\d{2}$/.test(m)) return m;
+  const p = m.split('-');
+  return T.months[parseInt(p[1], 10) - 1] + ' ' + p[0];
 }
+function sym(c) { return CURRENCIES[c] || c; }
 function fmtMoney(n) {
   const r = Math.round(n * 100) / 100;
-  const s = (Math.abs(r % 1) > 0.001 ? r.toFixed(2) : String(Math.round(r)));
-  const parts = s.split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return parts.join(',');
+  const s = Math.abs(r % 1) > 0.001 ? r.toFixed(2) : String(Math.round(r));
+  const p = s.split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return p.join(',');
 }
-function money(n, cur) { return fmtMoney(n) + ' ' + cur; }
-function today() {
-  const d = new Date();
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-}
-function pad(n) { return n < 10 ? '0' + n : String(n); }
-function fmtDate(iso) {
-  if (!iso) return '';
-  const p = iso.split('-');
-  if (p.length !== 3) return iso;
-  return p[2] + '.' + p[1] + '.' + p[0];
-}
-function isLate(p) {
-  if (!p.due) return false;
-  if (p.status === 'done' || p.status === 'paid' || p.status === 'off') return false;
-  return p.due < today();
-}
-function daysTo(iso) {
-  const a = new Date(today() + 'T00:00:00');
-  const b = new Date(iso + 'T00:00:00');
-  return Math.round((b - a) / 86400000);
+function money(n, cur) { return fmtMoney(n) + ' ' + sym(cur); }
+function payState(t) {
+  if (t.cost <= 0) return t.paid > 0 ? 'yes' : 'no';
+  if (t.paid <= 0) return 'no';
+  return t.paid >= t.cost ? 'yes' : 'part';
 }
 
 /* ---------- тема и язык ---------- */
@@ -110,173 +113,175 @@ function applyLang() {
   $$('[data-tp]').forEach(el => { const k = el.getAttribute('data-tp'); if (T[k]) el.placeholder = T[k]; });
   fillSelects();
 }
-function fillSelects() {
-  const fs = $('#fstatus'), keep = fs.value;
-  fs.innerHTML = '';
-  fs.appendChild(opt('', T.allStatuses));
-  STATUS_ORDER.forEach(s => fs.appendChild(opt(s, T.statuses[s])));
-  fs.value = keep;
-
-  const so = $('#sort'), keepS = so.value;
-  so.innerHTML = '';
-  [['due', T.sortDue], ['new', T.sortNew], ['name', T.sortName], ['price', T.sortPrice]]
-    .forEach(p => so.appendChild(opt(p[0], p[1])));
-  so.value = keepS || 'due';
-
-  const ms = $('#fStatus'), keepM = ms.value;
-  ms.innerHTML = '';
-  STATUS_ORDER.forEach(s => ms.appendChild(opt(s, T.statuses[s])));
-  ms.value = keepM || 'talks';
-
-  const mc = $('#fCur'), keepC = mc.value;
-  mc.innerHTML = '';
-  CURRENCIES.forEach(c => mc.appendChild(opt(c, c)));
-  mc.value = keepC || '₴';
+function opt(v, label) { const o = document.createElement('option'); o.value = v; o.textContent = label; return o; }
+function refill(sel, pairs, keepValue) {
+  const keep = keepValue !== undefined ? keepValue : sel.value;
+  sel.innerHTML = '';
+  pairs.forEach(p => sel.appendChild(opt(p[0], p[1])));
+  const has = pairs.some(p => p[0] === keep);
+  sel.value = has ? keep : pairs[0][0];
 }
-function opt(v, label) {
-  const o = document.createElement('option');
-  o.value = v; o.textContent = label;
-  return o;
+function fillSelects() {
+  const clients = uniq(state.tasks.map(t => t.client).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'uk'));
+  const months  = uniq(state.tasks.map(t => t.month).filter(Boolean)).sort().reverse();
+
+  refill($('#fclient'), [['', T.allClients]].concat(clients.map(c => [c, c])));
+  refill($('#fmonth'),  [['', T.allMonths]].concat(months.map(m => [m, fmtMonth(m)])));
+  refill($('#fstatus'), [['', T.allStatuses]].concat(STATUS_ORDER.map(s => [s, T.statuses[s]])));
+  refill($('#fpay'),    [['', T.allPay], ['no', T.payNo], ['part', T.payPart], ['yes', T.payYes]]);
+  refill($('#group'),   [['client', T.groupClient], ['month', T.groupMonth], ['none', T.groupNone]]);
+  refill($('#fStatus'), STATUS_ORDER.map(s => [s, T.statuses[s]]));
+  refill($('#fCur'),    CUR_ORDER.map(c => [c, sym(c) + ' ' + c]));
+
+  $('#clients').innerHTML = clients.map(c => '<option value="' + esc(c) + '">').join('');
+}
+function uniq(a) { return a.filter((v, i) => a.indexOf(v) === i); }
+
+/* ---------- выборка ---------- */
+
+function visible() {
+  const q  = $('#q').value.trim().toLowerCase();
+  const fc = $('#fclient').value, fm = $('#fmonth').value;
+  const fs = $('#fstatus').value, fp = $('#fpay').value;
+  return state.tasks.filter(t => {
+    if (fc && t.client !== fc) return false;
+    if (fm && t.month !== fm) return false;
+    if (fs && t.status !== fs) return false;
+    if (fp && payState(t) !== fp) return false;
+    if (q && (t.task + ' ' + t.client + ' ' + t.notes).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+}
+function sums(list) {
+  const m = {};
+  list.forEach(t => {
+    const a = m[t.currency] || (m[t.currency] = { cost: 0, paid: 0 });
+    a.cost += t.cost; a.paid += t.paid;
+  });
+  return m;
+}
+function moneyLines(m, pick) {
+  const keys = CUR_ORDER.filter(c => m[c] && pick(m[c]) > 0);
+  if (!keys.length) return '<span class="ln">—</span>';
+  return keys.map(c => '<span class="ln">' + esc(money(pick(m[c]), c)) + '</span>').join('');
 }
 
 /* ---------- отрисовка ---------- */
 
-function visible() {
-  const q = $('#q').value.trim().toLowerCase();
-  const st = $('#fstatus').value;
-  const sort = $('#sort').value || 'due';
-  let list = state.projects.slice();
-
-  if (st) list = list.filter(p => p.status === st);
-  if (q) list = list.filter(p => {
-    const hay = [p.name, p.client, p.note].concat(p.tasks.map(t => t.title)).join(' ').toLowerCase();
-    return hay.indexOf(q) >= 0;
-  });
-
-  list.sort((a, b) => {
-    if (sort === 'name')  return a.name.localeCompare(b.name, 'uk');
-    if (sort === 'new')   return b.created - a.created;
-    if (sort === 'price') return priceOf(b) - priceOf(a);
-    if (!a.due && !b.due) return b.created - a.created;
-    if (!a.due) return 1;
-    if (!b.due) return -1;
-    return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
-  });
-  return list;
-}
+function render() { fillSelects(); renderTiles(); renderList(); }
 
 function renderTiles() {
-  const act = state.projects.filter(p => ACTIVE_ST.indexOf(p.status) >= 0);
-  const late = state.projects.filter(isLate);
-  const dueM = {}, gotM = {};
-  state.projects.forEach(p => {
-    if (p.status === 'off') return;
-    const total = priceOf(p);
-    const rest = Math.max(0, total - p.paid);
-    if (rest > 0) dueM[p.cur] = (dueM[p.cur] || 0) + rest;
-    if (p.paid > 0) gotM[p.cur] = (gotM[p.cur] || 0) + p.paid;
-  });
+  const all = state.tasks;
+  const work = all.filter(t => OPEN_ST.indexOf(t.status) >= 0);
+  const debt = all.filter(t => t.status === 'done' && payState(t) !== 'yes');
+  const m = sums(all), dm = sums(debt);
   $('#tiles').innerHTML =
-    tile('', T.tileActive, '<span class="ln">' + act.length + '<span class="u"> ' + esc(pluralWord(act.length)) + '</span></span>') +
-    tile('', T.tileDue, moneyLines(dueM)) +
-    tile('got', T.tileGot, moneyLines(gotM)) +
-    tile(late.length ? 'late' : '', T.tileLate,
-         '<span class="ln">' + late.length + '<span class="u"> ' + esc(pluralWord(late.length)) + '</span></span>');
-}
-function moneyLines(m) {
-  const keys = CURRENCIES.filter(c => m[c]);
-  if (!keys.length) return '<span class="ln">—</span>';
-  return keys.map(c => '<span class="ln">' + esc(money(m[c], c)) + '</span>').join('');
+    tile('', T.tileWork, '<span class="ln">' + work.length + '<span class="u"> ' + esc(pluralWord(work.length)) + '</span></span>') +
+    tile('due', T.tileDue, moneyLines(m, a => a.cost - a.paid)) +
+    tile('got', T.tileGot, moneyLines(m, a => a.paid)) +
+    tile(debt.length ? 'late' : '', T.tileDebt,
+      '<span class="ln">' + debt.length + '<span class="u"> ' + esc(pluralWord(debt.length)) + '</span></span>' +
+      (debt.length ? moneyLines(dm, a => a.cost - a.paid) : ''));
 }
 function tile(cls, lab, val) {
   return '<div class="tile ' + cls + '"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div></div>';
-}
-
-function renderList() {
-  const list = visible();
-  const box = $('#list');
-  box.innerHTML = list.map(cardHtml).join('');
-  $('#empty').classList.toggle('hidden', state.projects.length > 0);
-  $('#count').textContent = state.projects.length ? plural(list.length) : '';
 }
 function pluralWord(n) {
   const a = n % 10, b = n % 100;
   return (a === 1 && b !== 11) ? T.countOne
        : (a >= 2 && a <= 4 && (b < 10 || b >= 20)) ? T.countFew : T.countMany;
 }
-function plural(n) { return n + ' ' + pluralWord(n); }
 
-function cardHtml(p) {
-  const total = priceOf(p), rest = Math.max(0, total - p.paid), late = isLate(p);
-  const open = !!openIds[p.id];
-  const metas = [];
-  if (p.due) {
-    const d = daysTo(p.due);
-    metas.push('<span class="' + (late ? 'late' : '') + '">' + esc(T.due) + ' ' + esc(fmtDate(p.due)) +
-      (late ? ' · ' + Math.abs(d) + ' д' : (d >= 0 && d <= 7 ? ' · ' + d + ' д' : '')) + '</span>');
-  }
-  if (p.start) metas.push('<span>' + esc(T.started) + ' ' + esc(fmtDate(p.start)) + '</span>');
-  if (p.tasks.length) {
-    const done = p.tasks.filter(t => t.done).length;
-    metas.push('<span>' + esc(T.tasks) + ' ' + done + '/' + p.tasks.length + '</span>');
+function renderList() {
+  const list = visible();
+  const mode = $('#group').value;
+  const box = $('#list');
+
+  $('#empty').classList.toggle('hidden', state.tasks.length > 0);
+  $('#count').textContent = state.tasks.length ? list.length + ' ' + pluralWord(list.length) : '';
+
+  if (!list.length) {
+    box.innerHTML = state.tasks.length
+      ? '<div class="card empty"><p class="sub">' + esc(T.noTasks) + '</p></div>' : '';
+    return;
   }
 
-  let paidLine = '', sumLine;
-  if (total > 0) {
-    sumLine = '<div class="psum">' + esc(money(total, p.cur)) + '</div>';
-    if (p.paid <= 0) paidLine = '<div class="ppaid">' + esc(T.nothingPaid) + '</div>';
-    else if (rest <= 0) paidLine = '<div class="ppaid full">' + esc(T.paidFull) + '</div>';
-    else paidLine = '<div class="ppaid">' + esc(T.left) + ' ' + esc(money(rest, p.cur)) + '</div>';
-  } else if (p.paid > 0) {
-    sumLine = '<div class="psum">' + esc(money(p.paid, p.cur)) + '</div>';
-    paidLine = '<div class="ppaid full">' + esc(T.paidFull) + '</div>';
-  } else {
-    sumLine = '<div class="psum hint">\u2014</div>';
-  }
+  if (mode === 'none') { box.innerHTML = '<div class="group">' + rows(list) + '</div>'; return; }
 
-  return '<article class="proj' + (open ? ' open' : '') + (late ? ' isLate' : '') + '" data-id="' + p.id + '">' +
-    '<div class="phead" data-act="toggle">' +
-      '<div class="chev">▶</div>' +
-      '<div class="pmain">' +
-        '<div class="pname">' + esc(p.name) +
-          '<span class="tag ' + (late ? 'bad' : STATUS_TONE[p.status]) + '">' + esc(T.statuses[p.status]) + '</span>' +
-        '</div>' +
-        (p.client ? '<div class="pclient">' + esc(p.client) + '</div>' : '') +
-        (metas.length ? '<div class="pmeta">' + metas.join('') + '</div>' : '') +
-      '</div>' +
-      '<div class="pmoney">' +
-        sumLine + paidLine +
-      '</div>' +
-    '</div>' +
-    (open ? bodyHtml(p) : '') +
-  '</article>';
+  const keyOf = t => mode === 'client' ? (t.client || '—') : t.month;
+  const keys = uniq(list.map(keyOf));
+  keys.sort(mode === 'month'
+    ? (a, b) => (a < b ? 1 : a > b ? -1 : 0)
+    : (a, b) => {
+        const d = debtOf(list.filter(t => keyOf(t) === b)) - debtOf(list.filter(t => keyOf(t) === a));
+        return d !== 0 ? d : a.localeCompare(b, 'uk');
+      });
+
+  box.innerHTML = keys.map(k => {
+    const part = list.filter(t => keyOf(t) === k);
+    const m = sums(part);
+    const parts = CUR_ORDER.filter(c => m[c]).map(c => {
+      const left = m[c].cost - m[c].paid;
+      return '<span>' + esc(T.total) + ' ' + esc(money(m[c].cost, c)) + '</span>' +
+        (left > 0 ? '<span class="gdebt">' + esc(T.debt) + ' ' + esc(money(left, c)) + '</span>' : '');
+    }).join('');
+    return '<div class="group">' +
+      '<div class="ghead"><div class="gname">' + esc(mode === 'month' ? fmtMonth(k) : k) +
+        '<span class="gcount">' + part.length + '</span></div>' +
+        '<div class="gsum">' + parts + '</div></div>' +
+      rows(part) + '</div>';
+  }).join('');
+}
+function debtOf(list) {
+  return list.reduce((s, t) => s + Math.max(0, t.cost - t.paid), 0);
 }
 
-function bodyHtml(p) {
-  const tasks = p.tasks.length
-    ? '<ul class="tasks">' + p.tasks.map(t =>
-        '<li class="task' + (t.done ? ' done' : '') + '" data-tid="' + t.id + '">' +
-          '<input type="checkbox" data-act="task-done"' + (t.done ? ' checked' : '') + '>' +
-          '<span class="tt">' + esc(t.title) + '</span>' +
-          (t.price > 0 ? '<span class="tp">' + esc(money(t.price, p.cur)) + '</span>' : '') +
-          '<button type="button" class="tdel" data-act="task-del" aria-label="×">✕</button>' +
-        '</li>').join('') + '</ul>'
-    : '<p class="sub" style="margin-bottom:12px">' + esc(T.noTasks) + '</p>';
+function rows(list) {
+  const order = { work: 0, review: 1, new: 2, done: 3 };
+  list = list.slice().sort((a, b) => {
+    const d = order[a.status] - order[b.status];
+    if (d) return d;
+    return (b.created || '') < (a.created || '') ? -1 : 1;
+  });
+  return list.map(rowHtml).join('');
+}
 
-  return '<div class="pbody">' +
-    (p.note ? '<p class="pnote">' + esc(p.note) + '</p>' : '') +
-    (p.link ? '<a class="plink" href="' + esc(p.link) + '" target="_blank" rel="noopener">' + esc(p.link) + '</a>' : '') +
-    '<p class="ptitle">' + esc(T.tasks) + '</p>' +
-    tasks +
-    '<div class="newtask">' +
-      '<input class="inp ti" data-act="task-title" placeholder="' + esc(T.taskPh) + '">' +
-      '<input class="inp tpr" data-act="task-price" inputmode="decimal" placeholder="' + esc(p.cur) + '">' +
-      '<button type="button" class="btn" data-act="task-add">' + esc(T.addTask) + '</button>' +
+function rowHtml(t) {
+  const ps = payState(t), left = Math.max(0, t.cost - t.paid);
+  const open = !!openIds[t.id];
+  const flag = t.status === 'done' && ps !== 'yes';
+
+  let pay;
+  if (ps === 'yes')      pay = '<span class="pay ok">' + esc(T.paidFull) + '</span>';
+  else if (ps === 'part') pay = '<span class="pay part">' + esc(T.paidPart) + ' ' + esc(money(t.paid, t.currency)) + '</span>';
+  else                    pay = '<span class="pay no">' + esc(T.notPaid) + '</span>';
+
+  return '<article class="row' + (open ? ' open' : '') + (flag ? ' flag' : '') + '" data-id="' + t.id + '">' +
+    '<div class="rhead" data-act="toggle">' +
+      '<span class="tag ' + STATUS_TONE[t.status] + '">' + esc(T.statuses[t.status]) + '</span>' +
+      '<div class="rmain">' +
+        '<div class="rname">' + esc(t.task) + (t.notes ? ' <span class="hasnote">•</span>' : '') + '</div>' +
+        '<div class="rsub">' + esc(t.client) + (t.client && t.month ? ' · ' : '') + esc(fmtMonth(t.month)) + '</div>' +
+      '</div>' +
+      '<div class="rmoney">' +
+        '<div class="rcost">' + (t.cost > 0 ? esc(money(t.cost, t.currency)) : '—') + '</div>' +
+        pay +
+      '</div>' +
     '</div>' +
-    '<div class="pacts">' +
-      '<button type="button" class="minibtn" data-act="edit">' + esc(T.edit) + '</button>' +
-    '</div>' +
-  '</div>';
+    (open ? '<div class="rbody">' +
+      (t.notes ? '<p class="rnote">' + esc(t.notes) + '</p>' : '') +
+      '<div class="rmeta">' +
+        (t.created ? '<span>' + esc(T.created) + ' ' + esc(fmtDate(t.created)) + '</span>' : '') +
+        (t.deadline ? '<span>' + esc(T.deadline) + ' ' + esc(fmtDate(t.deadline)) + '</span>' : '') +
+        (left > 0 && t.cost > 0 ? '<span>' + esc(T.left) + ' ' + esc(money(left, t.currency)) + '</span>' : '') +
+      '</div>' +
+      '<div class="racts">' +
+        '<button type="button" class="minibtn" data-act="edit">' + esc(T.edit) + '</button>' +
+        (t.status !== 'done' ? '<button type="button" class="minibtn" data-act="done">' + esc(T.markDone) + '</button>' : '') +
+        (ps !== 'yes' && t.cost > 0 ? '<button type="button" class="minibtn" data-act="paid">' + esc(T.markPaid) + '</button>' : '') +
+      '</div>' +
+    '</div>' : '') +
+  '</article>';
 }
 
 function esc(s) {
@@ -284,105 +289,95 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-function render() { renderTiles(); renderList(); }
 
 /* ---------- модалка ---------- */
 
-let editId = null;
-
-function openModal(p) {
-  editId = p ? p.id : null;
-  $('#mtitle').textContent = p ? T.mEdit : T.mNew;
-  $('#mdel').classList.toggle('hidden', !p);
-  $('#fName').value   = p ? p.name : '';
-  $('#fClient').value = p ? p.client : '';
-  $('#fStatus').value = p ? p.status : 'talks';
-  $('#fStart').value  = p ? p.start : today();
-  $('#fDue').value    = p ? p.due : '';
-  $('#fPrice').value  = p && p.price ? p.price : '';
-  $('#fPaid').value   = p && p.paid ? p.paid : '';
-  $('#fCur').value    = p ? p.cur : '₴';
-  $('#fAuto').checked = p ? p.auto : false;
-  $('#fLink').value   = p ? p.link : '';
-  $('#fNote').value   = p ? p.note : '';
-  syncAuto();
+function openModal(t) {
+  editId = t ? t.id : null;
+  $('#mtitle').textContent = t ? T.mEdit : T.mNew;
+  $('#mdel').classList.toggle('hidden', !t);
+  $('#fTask').value     = t ? t.task : '';
+  $('#fClient').value   = t ? t.client : '';
+  $('#fStatus').value   = t ? t.status : 'new';
+  $('#fMonth').value    = t ? t.month : thisMonth();
+  $('#fCreated').value  = t ? t.created : today();
+  $('#fDeadline').value = t ? t.deadline : '';
+  $('#fCost').value     = t && t.cost ? t.cost : '';
+  $('#fPaid').value     = t && t.paid ? t.paid : '';
+  $('#fCur').value      = t ? t.currency : 'UAH';
+  $('#fNotes').value    = t ? t.notes : '';
   $('#modal').classList.remove('hidden');
-  setTimeout(() => $('#fName').focus(), 30);
+  setTimeout(() => $('#fTask').focus(), 30);
 }
 function closeModal() { $('#modal').classList.add('hidden'); editId = null; }
-function syncAuto() { $('#fPrice').disabled = $('#fAuto').checked; }
 
 function saveModal() {
-  const name = $('#fName').value.trim();
-  if (!name) { alert(T.needName); $('#fName').focus(); return; }
+  const task = $('#fTask').value.trim();
+  if (!task) { alert(T.needTask); $('#fTask').focus(); return; }
   const data = {
-    name: name,
+    task: task,
     client: $('#fClient').value.trim(),
     status: $('#fStatus').value,
-    start: $('#fStart').value,
-    due: $('#fDue').value,
-    price: num($('#fPrice').value),
+    month: $('#fMonth').value || thisMonth(),
+    created: $('#fCreated').value,
+    deadline: $('#fDeadline').value,
+    cost: num($('#fCost').value),
     paid: num($('#fPaid').value),
-    cur: $('#fCur').value,
-    auto: $('#fAuto').checked,
-    link: $('#fLink').value.trim(),
-    note: $('#fNote').value.trim()
+    currency: $('#fCur').value,
+    notes: $('#fNotes').value.trim()
   };
   if (editId) {
-    const p = find(editId);
-    if (p) Object.keys(data).forEach(k => { p[k] = data[k]; });
+    const t = find(editId);
+    if (t) Object.keys(data).forEach(k => { t[k] = data[k]; });
   } else {
-    const p = normProject(data);
-    state.projects.push(p);
-    openIds[p.id] = true;
+    const t = normTask(data);
+    state.tasks.unshift(t);
+    openIds[t.id] = true;
   }
   save(); render(); closeModal();
 }
-function find(id) { return state.projects.filter(p => p.id === id)[0]; }
+function find(id) { return state.tasks.filter(t => t.id === id)[0]; }
 
-/* ---------- CSV и копии ---------- */
+/* ---------- файлы ---------- */
 
 function exportCsv() {
   const h = T.csv;
-  const rows = [[h.name, h.client, h.status, h.start, h.due, h.price, h.paid, h.left,
-                 h.cur, h.tasks, h.tasksDone, h.note, h.link]];
-  state.projects.forEach(p => {
-    const total = priceOf(p);
-    rows.push([p.name, p.client, T.statuses[p.status], fmtDate(p.start), fmtDate(p.due),
-      total || '', p.paid || '', Math.max(0, total - p.paid) || '', p.cur,
-      p.tasks.map(t => t.title).join(' | '),
-      p.tasks.filter(t => t.done).length + '/' + p.tasks.length,
-      p.note, p.link]);
-  });
+  const rows = [[h.task, h.client, h.month, h.created, h.deadline, h.status,
+                 h.cost, h.paid, h.left, h.cur, h.notes]];
+  state.tasks.forEach(t => rows.push([
+    t.task, t.client, fmtMonth(t.month), fmtDate(t.created), fmtDate(t.deadline),
+    T.statuses[t.status], t.cost || '', t.paid || '',
+    Math.max(0, t.cost - t.paid) || '', t.currency, t.notes
+  ]));
   const csv = '﻿' + rows.map(r => r.map(c => {
     const s = String(c == null ? '' : c);
     return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }).join(';')).join('\r\n');
-  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'projects-' + today() + '.csv');
+  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'tasks-' + today() + '.csv');
 }
 function backup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-  download(blob, 'projects-backup-' + today() + '.json');
+  download(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }),
+           'my-projects-' + today() + '.json');
 }
-function restore(file) {
+function loadFile(file) {
   const fr = new FileReader();
   fr.onload = () => {
     let d;
     try { d = JSON.parse(fr.result); } catch (e) { alert(T.badFile); return; }
-    if (!d || !Array.isArray(d.projects)) { alert(T.badFile); return; }
-    if (!confirm(T.confirmRestore)) return;
-    state.projects = d.projects.map(normProject);
+    const s = fromAny(d);
+    if (!s) { alert(T.badFile); return; }
+    if (state.tasks.length && !confirm(T.confirmLoad)) return;
+    state.tasks = s.tasks;
     if (d.lang === 'uk' || d.lang === 'ru') state.lang = d.lang;
     openIds = {};
     save(); applyLang(); render();
-    alert(T.restored);
+    alert(T.loaded + s.tasks.length);
   };
   fr.readAsText(file);
 }
 function download(blob, name) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
+  a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
 }
@@ -390,82 +385,48 @@ function download(blob, name) {
 /* ---------- события ---------- */
 
 $('#theme').addEventListener('click', () => {
-  state.theme = state.theme === 'dark' ? 'light' : 'dark';
-  save(); applyTheme();
+  state.theme = state.theme === 'dark' ? 'light' : 'dark'; save(); applyTheme();
 });
 $('#lang').addEventListener('click', () => {
-  state.lang = state.lang === 'ru' ? 'uk' : 'ru';
-  save(); applyLang(); render();
+  state.lang = state.lang === 'ru' ? 'uk' : 'ru'; save(); applyLang(); render();
 });
 $('#add').addEventListener('click', () => openModal(null));
 $('#q').addEventListener('input', renderList);
-$('#fstatus').addEventListener('change', renderList);
-$('#sort').addEventListener('change', renderList);
+['#fclient', '#fmonth', '#fstatus', '#fpay', '#group'].forEach(s =>
+  $(s).addEventListener('change', renderList));
 $('#exportCsv').addEventListener('click', exportCsv);
 $('#backup').addEventListener('click', backup);
 $('#restore').addEventListener('click', () => $('#restoreFile').click());
 $('#restoreFile').addEventListener('change', e => {
-  if (e.target.files && e.target.files[0]) restore(e.target.files[0]);
+  if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
   e.target.value = '';
 });
-
 $('#msave').addEventListener('click', saveModal);
 $('#mcancel').addEventListener('click', closeModal);
 $('#mclose').addEventListener('click', closeModal);
-$('#fAuto').addEventListener('change', syncAuto);
 $('#mdel').addEventListener('click', () => {
   if (!editId || !confirm(T.confirmDel)) return;
-  state.projects = state.projects.filter(p => p.id !== editId);
+  state.tasks = state.tasks.filter(t => t.id !== editId);
   save(); render(); closeModal();
 });
 $('#modal').addEventListener('mousedown', e => { if (e.target === $('#modal')) closeModal(); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#modal').classList.contains('hidden')) closeModal();
 });
-
 $('#list').addEventListener('click', e => {
-  const art = e.target.closest('.proj'); if (!art) return;
-  const p = find(art.getAttribute('data-id')); if (!p) return;
+  const art = e.target.closest('.row'); if (!art) return;
+  const t = find(art.getAttribute('data-id')); if (!t) return;
   const hit = e.target.closest('[data-act]');
   const act = hit ? hit.getAttribute('data-act') : null;
-
-  if (act === 'toggle') { openIds[p.id] = !openIds[p.id]; renderList(); return; }
-  if (act === 'edit')   { openModal(p); return; }
-  if (act === 'task-add') { addTask(p, art); return; }
-  if (act === 'task-del') {
-    const li = e.target.closest('.task');
-    p.tasks = p.tasks.filter(t => t.id !== li.getAttribute('data-tid'));
-    save(); render(); return;
-  }
+  if (act === 'toggle') { openIds[t.id] = !openIds[t.id]; renderList(); return; }
+  if (act === 'edit')   { openModal(t); return; }
+  if (act === 'done')   { t.status = 'done'; save(); render(); return; }
+  if (act === 'paid')   { t.paid = t.cost; save(); render(); return; }
 });
-$('#list').addEventListener('change', e => {
-  if (!e.target.matches('[data-act="task-done"]')) return;
-  const art = e.target.closest('.proj'), li = e.target.closest('.task');
-  const p = find(art.getAttribute('data-id')); if (!p) return;
-  const t = p.tasks.filter(x => x.id === li.getAttribute('data-tid'))[0];
-  if (t) { t.done = e.target.checked; save(); render(); }
-});
-$('#list').addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  if (!e.target.matches('[data-act="task-title"],[data-act="task-price"]')) return;
-  const art = e.target.closest('.proj');
-  const p = find(art.getAttribute('data-id'));
-  if (p) addTask(p, art);
-});
-function addTask(p, art) {
-  const ti = $('[data-act="task-title"]', art), tp = $('[data-act="task-price"]', art);
-  const title = ti.value.trim();
-  if (!title) { ti.focus(); return; }
-  p.tasks.push({ id: uid(), title: title, done: false, price: num(tp.value) });
-  save(); render();
-  const again = $('.proj[data-id="' + p.id + '"] [data-act="task-title"]');
-  if (again) again.focus();
-}
 
 /* ---------- старт ---------- */
 
 applyTheme();
 applyLang();
-$('#sort').value = 'due';
 render();
 })();

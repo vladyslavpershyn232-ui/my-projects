@@ -52,6 +52,7 @@ h2{margin:0 0 4px;font-size:19px;letter-spacing:-.015em;font-weight:640}
 .tile .val .ln + .ln{margin-top:2px;font-size:19px}
 .tile.late .val{color:var(--bad)}
 .tile.got .val{color:var(--ok)}
+.tile.due .val{color:var(--ink)}
 
 /* toolbar */
 .toolbar{padding:16px 18px}
@@ -74,57 +75,44 @@ select.inp{cursor:pointer}
   padding:7px 12px;font-size:13px;color:var(--ink-2)}
 .minibtn:hover{border-color:var(--ink-3);color:var(--ink)}
 
-/* project card */
-.proj{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+/* groups and rows */
+.group{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
   box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
-.proj.isLate{border-color:var(--bad)}
-.phead{display:flex;gap:16px;align-items:flex-start;padding:18px 20px;cursor:pointer}
-.phead:hover{background:var(--mut-bg)}
-.pmain{flex:1;min-width:0}
-.pname{font-size:17px;font-weight:620;letter-spacing:-.015em;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
-.pclient{color:var(--ink-3);font-size:13.5px;margin-top:2px}
-.pmeta{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--ink-3)}
-.pmeta .late{color:var(--bad);font-weight:570}
-.pmoney{text-align:right;flex:none}
-.psum{font-size:17px;font-weight:620;letter-spacing:-.015em;white-space:nowrap}
-.ppaid{font-size:12.5px;color:var(--ink-3);margin-top:3px;white-space:nowrap}
-.ppaid.full{color:var(--ok)}
-.chev{flex:none;color:var(--ink-3);font-size:12px;margin-top:4px;transition:transform .15s}
-.proj.open .chev{transform:rotate(90deg)}
+.ghead{display:flex;gap:14px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;
+  padding:14px 20px;background:var(--mut-bg);border-bottom:1px solid var(--line)}
+.gname{font-size:14.5px;font-weight:640;letter-spacing:-.01em;display:flex;gap:9px;align-items:center}
+.gcount{font-size:11.5px;font-weight:570;color:var(--ink-3);background:var(--card);
+  border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.gsum{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3)}
+.gsum .gdebt{color:var(--bad);font-weight:570}
 
-.tag{display:inline-flex;align-items:center;border-radius:99px;padding:3px 10px;
-  font-size:11.5px;font-weight:570;letter-spacing:.01em;flex:none}
+.row + .row{border-top:1px solid var(--line)}
+.row.flag{box-shadow:inset 3px 0 0 var(--bad)}
+.rhead{display:flex;gap:14px;align-items:flex-start;padding:13px 20px;cursor:pointer}
+.rhead:hover{background:var(--mut-bg)}
+.rmain{flex:1;min-width:0}
+.rname{font-size:14.5px;font-weight:550;overflow-wrap:anywhere}
+.hasnote{color:var(--ink-3)}
+.rsub{color:var(--ink-3);font-size:12.5px;margin-top:2px}
+.rmoney{text-align:right;flex:none}
+.rcost{font-size:14.5px;font-weight:620;white-space:nowrap}
+.pay{display:block;font-size:12px;margin-top:2px;white-space:nowrap}
+.pay.ok{color:var(--ok)}
+.pay.part{color:var(--warn)}
+.pay.no{color:var(--ink-3)}
+.row.flag .pay.no{color:var(--bad)}
+.tag{display:inline-flex;align-items:center;border-radius:99px;padding:3px 10px;flex:none;
+  font-size:11.5px;font-weight:570;letter-spacing:.01em;margin-top:1px;min-width:86px;justify-content:center}
 .tag.ok{background:var(--ok-bg);color:var(--ok)}
 .tag.warn{background:var(--warn-bg);color:var(--warn)}
 .tag.mut{background:var(--mut-bg);color:var(--mut)}
 .tag.bad{background:var(--bad-bg);color:var(--bad)}
 
-.pbody{border-top:1px solid var(--line);padding:18px 20px}
-.pnote{background:var(--mut-bg);border-radius:11px;padding:11px 13px;font-size:13.5px;
-  color:var(--ink-2);white-space:pre-wrap;margin:0 0 14px}
-.plink{display:inline-block;font-size:13.5px;color:var(--ink-2);margin:0 0 14px;word-break:break-all}
-.ptitle{font-size:12.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;
-  font-weight:600;margin:0 0 9px}
-.tasks{list-style:none;margin:0 0 12px;padding:0}
-.task{display:flex;gap:11px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
-.task:first-child{border-top:0}
-.task input[type=checkbox]{appearance:none;-webkit-appearance:none;margin:0;flex:none;cursor:pointer;
-  width:18px;height:18px;border:1.5px solid var(--line-2);border-radius:5px;background:var(--card);
-  display:grid;place-content:center;transition:.12s}
-.task input[type=checkbox]:hover{border-color:var(--ink-3)}
-.task input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
-.task input[type=checkbox]:checked::after{content:'';width:10px;height:6px;margin-top:-2px;
-  border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg)}
-.task input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.task .tt{flex:1;min-width:0;font-size:14px;overflow-wrap:anywhere}
-.task.done .tt{color:var(--ink-3);text-decoration:line-through}
-.task .tp{font-size:13.5px;color:var(--ink-2);white-space:nowrap;flex:none}
-.task .tdel{border:0;background:none;color:var(--ink-3);font-size:15px;line-height:1;padding:4px 2px;flex:none}
-.task .tdel:hover{color:var(--bad)}
-.newtask{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.newtask .ti{flex:1;min-width:160px}
-.newtask .tpr{width:110px;flex:none}
-.pacts{display:flex;gap:8px;flex-wrap:wrap}
+.rbody{padding:0 20px 16px 20px}
+.rnote{background:var(--mut-bg);border-radius:11px;padding:11px 13px;font-size:13px;
+  color:var(--ink-2);white-space:pre-wrap;margin:0 0 12px;overflow-wrap:anywhere}
+.rmeta{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin-bottom:12px}
+.racts{display:flex;gap:8px;flex-wrap:wrap}
 
 /* modal */
 .modal{position:fixed;inset:0;background:rgba(10,10,12,.45);z-index:50;
@@ -164,10 +152,10 @@ footer .hint{max-width:70ch}
   .tile .val .ln + .ln{font-size:17px}
   .card{padding:18px}
   .f2,.f3{grid-template-columns:1fr}
-  .phead{padding:15px 16px;gap:12px}
-  .pbody{padding:15px 16px}
-  .pname{font-size:16px}
-  .psum{font-size:15px}
+  .ghead{padding:12px 16px}
+  .rhead{padding:12px 16px;gap:10px}
+  .rbody{padding:0 16px 14px}
+  .tag{min-width:0}
   .toolrow .inp,.toolrow .btn{width:100%}
   .grow{min-width:0}
   .sheet{max-width:none}
