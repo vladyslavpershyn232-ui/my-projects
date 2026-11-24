@@ -10,6 +10,7 @@ let state = load();
 let T = I18N[state.lang] || I18N.ru;
 let openIds = {};
 let editId = null;
+let view = { year: 0, month: '' };   /* month: 'YYYY-MM' или '' = весь год */
 
 /* ---------- хранилище ---------- */
 
@@ -78,10 +79,12 @@ function today() { const d = new Date(); return d.getFullYear() + '-' + pad(d.ge
 function thisMonth() { return today().slice(0, 7); }
 function pad(n) { return n < 10 ? '0' + n : String(n); }
 function fmtDate(iso) { if (!iso) return ''; const p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
-function fmtMonth(m) {
+function fmtMonth(m, caps) {
   if (!/^\d{4}-\d{2}$/.test(m)) return m;
   const p = m.split('-');
-  return T.months[parseInt(p[1], 10) - 1] + ' ' + p[0];
+  let name = T.months[parseInt(p[1], 10) - 1];
+  if (caps) name = name.charAt(0).toUpperCase() + name.slice(1);
+  return name + ' ' + p[0];
 }
 function sym(c) { return CURRENCIES[c] || c; }
 function fmtMoney(n) {
@@ -123,13 +126,11 @@ function refill(sel, pairs, keepValue) {
 }
 function fillSelects() {
   const clients = uniq(state.tasks.map(t => t.client).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'uk'));
-  const months  = uniq(state.tasks.map(t => t.month).filter(Boolean)).sort().reverse();
 
   refill($('#fclient'), [['', T.allClients]].concat(clients.map(c => [c, c])));
-  refill($('#fmonth'),  [['', T.allMonths]].concat(months.map(m => [m, fmtMonth(m)])));
   refill($('#fstatus'), [['', T.allStatuses]].concat(STATUS_ORDER.map(s => [s, T.statuses[s]])));
   refill($('#fpay'),    [['', T.allPay], ['no', T.payNo], ['part', T.payPart], ['yes', T.payYes]]);
-  refill($('#group'),   [['client', T.groupClient], ['month', T.groupMonth], ['none', T.groupNone]]);
+  refill($('#group'),   [['client', T.groupClient], ['none', T.groupNone]]);
   refill($('#fStatus'), STATUS_ORDER.map(s => [s, T.statuses[s]]));
   refill($('#fCur'),    CUR_ORDER.map(c => [c, sym(c) + ' ' + c]));
 
@@ -139,13 +140,16 @@ function uniq(a) { return a.filter((v, i) => a.indexOf(v) === i); }
 
 /* ---------- выборка ---------- */
 
+function inView(t) {
+  return view.month ? t.month === view.month : t.month.slice(0, 4) === String(view.year);
+}
 function visible() {
   const q  = $('#q').value.trim().toLowerCase();
-  const fc = $('#fclient').value, fm = $('#fmonth').value;
+  const fc = $('#fclient').value;
   const fs = $('#fstatus').value, fp = $('#fpay').value;
   return state.tasks.filter(t => {
+    if (!inView(t)) return false;
     if (fc && t.client !== fc) return false;
-    if (fm && t.month !== fm) return false;
     if (fs && t.status !== fs) return false;
     if (fp && payState(t) !== fp) return false;
     if (q && (t.task + ' ' + t.client + ' ' + t.notes).toLowerCase().indexOf(q) < 0) return false;
@@ -162,29 +166,71 @@ function sums(list) {
 }
 function moneyLines(m, pick) {
   const keys = CUR_ORDER.filter(c => m[c] && pick(m[c]) > 0);
-  if (!keys.length) return '<span class="ln">—</span>';
+  if (!keys.length) return '<span class="ln zero">\u2014</span>';
   return keys.map(c => '<span class="ln">' + esc(money(pick(m[c]), c)) + '</span>').join('');
 }
 
 /* ---------- отрисовка ---------- */
 
-function render() { fillSelects(); renderTiles(); renderList(); }
+function render() { fillSelects(); renderMonths(); renderTiles(); renderList(); }
+
+function years() {
+  const ys = uniq(state.tasks.map(t => t.month.slice(0, 4)).filter(Boolean)).map(Number);
+  if (!ys.length) ys.push(new Date().getFullYear());
+  return ys.sort();
+}
+function initView() {
+  const ys = years();
+  const now = new Date();
+  const nowM = thisMonth();
+  const has = state.tasks.some(t => t.month === nowM);
+  view.year  = has ? now.getFullYear() : ys[ys.length - 1];
+  const inY = state.tasks.filter(t => t.month.slice(0, 4) === String(view.year)).map(t => t.month).sort();
+  view.month = has ? nowM : (inY.length ? inY[inY.length - 1] : nowM);
+}
+function renderMonths() {
+  const y = view.year;
+  const counts = {};
+  state.tasks.forEach(t => { if (t.month.slice(0, 4) === String(y)) counts[t.month] = (counts[t.month] || 0) + 1; });
+  let html = '';
+  for (let i = 0; i < 12; i++) {
+    const m = y + '-' + pad(i + 1), n = counts[m] || 0;
+    html += '<button type="button" class="mo' + (view.month === m ? ' on' : '') + (n ? '' : ' zero') +
+      '" data-m="' + m + '"><span class="mn">' + esc(T.shortMonths[i]) + '</span>' +
+      '<span class="mc">' + (n ? n + ' ' + esc(T.nTasks) : '—') + '</span></button>';
+  }
+  const total = Object.keys(counts).reduce((a, k) => a + counts[k], 0);
+  html += '<button type="button" class="mo year' + (view.month ? '' : ' on') + (total ? '' : ' zero') +
+    '" data-m=""><span class="mn">' + esc(T.wholeYear) + '</span>' +
+    '<span class="mc">' + (total ? total + ' ' + esc(T.nTasks) : '—') + '</span></button>';
+  $('#months').innerHTML = html;
+  $('#ylabel').textContent = y;
+  $('#mlabel').textContent = view.month ? fmtMonth(view.month, true) : T.wholeYear + ' ' + y;
+}
+function stepMonth(d) {
+  const base = view.month || (view.year + '-01');
+  const dt = new Date(base + '-01T00:00:00');
+  dt.setMonth(dt.getMonth() + d);
+  view.year = dt.getFullYear();
+  view.month = dt.getFullYear() + '-' + pad(dt.getMonth() + 1);
+  render();
+}
 
 function renderTiles() {
-  const all = state.tasks;
-  const work = all.filter(t => OPEN_ST.indexOf(t.status) >= 0);
-  const debt = all.filter(t => t.status === 'done' && payState(t) !== 'yes');
-  const m = sums(all), dm = sums(debt);
+  const list = state.tasks.filter(inView);
+  const work = list.filter(t => OPEN_ST.indexOf(t.status) >= 0);
+  const m = sums(list);
+  const sub = view.month ? T.tTotalS : T.tTotalY;
   $('#tiles').innerHTML =
-    tile('', T.tileWork, '<span class="ln">' + work.length + '<span class="u"> ' + esc(pluralWord(work.length)) + '</span></span>') +
-    tile('due', T.tileDue, moneyLines(m, a => a.cost - a.paid)) +
-    tile('got', T.tileGot, moneyLines(m, a => a.paid)) +
-    tile(debt.length ? 'late' : '', T.tileDebt,
-      '<span class="ln">' + debt.length + '<span class="u"> ' + esc(pluralWord(debt.length)) + '</span></span>' +
-      (debt.length ? moneyLines(dm, a => a.cost - a.paid) : ''));
+    tile('', T.tTotal, '<span class="ln">' + list.length + '</span>', sub) +
+    tile('', T.tWork, '<span class="ln">' + work.length + '</span>', T.tWorkS) +
+    tile('', T.tCost, moneyLines(m, a => a.cost), T.tCostS) +
+    tile('got', T.tGot, moneyLines(m, a => a.paid), T.tGotS) +
+    tile('late', T.tWait, moneyLines(m, a => a.cost - a.paid), T.tWaitS);
 }
-function tile(cls, lab, val) {
-  return '<div class="tile ' + cls + '"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div></div>';
+function tile(cls, lab, val, sub) {
+  return '<div class="tile ' + cls + '"><div class="lab">' + esc(lab) + '</div><div class="val">' + val + '</div>' +
+    (sub ? '<div class="tsub">' + esc(sub) + '</div>' : '') + '</div>';
 }
 function pluralWord(n) {
   const a = n % 10, b = n % 100;
@@ -208,14 +254,12 @@ function renderList() {
 
   if (mode === 'none') { box.innerHTML = '<div class="group">' + rows(list) + '</div>'; return; }
 
-  const keyOf = t => mode === 'client' ? (t.client || '—') : t.month;
+  const keyOf = t => t.client || '—';
   const keys = uniq(list.map(keyOf));
-  keys.sort(mode === 'month'
-    ? (a, b) => (a < b ? 1 : a > b ? -1 : 0)
-    : (a, b) => {
-        const d = debtOf(list.filter(t => keyOf(t) === b)) - debtOf(list.filter(t => keyOf(t) === a));
-        return d !== 0 ? d : a.localeCompare(b, 'uk');
-      });
+  keys.sort((a, b) => {
+    const d = debtOf(list.filter(t => keyOf(t) === b)) - debtOf(list.filter(t => keyOf(t) === a));
+    return d !== 0 ? d : a.localeCompare(b, 'uk');
+  });
 
   box.innerHTML = keys.map(k => {
     const part = list.filter(t => keyOf(t) === k);
@@ -226,7 +270,7 @@ function renderList() {
         (left > 0 ? '<span class="gdebt">' + esc(T.debt) + ' ' + esc(money(left, c)) + '</span>' : '');
     }).join('');
     return '<div class="group">' +
-      '<div class="ghead"><div class="gname">' + esc(mode === 'month' ? fmtMonth(k) : k) +
+      '<div class="ghead"><div class="gname">' + esc(k) +
         '<span class="gcount">' + part.length + '</span></div>' +
         '<div class="gsum">' + parts + '</div></div>' +
       rows(part) + '</div>';
@@ -261,7 +305,8 @@ function rowHtml(t) {
       '<span class="tag ' + STATUS_TONE[t.status] + '">' + esc(T.statuses[t.status]) + '</span>' +
       '<div class="rmain">' +
         '<div class="rname">' + esc(t.task) + (t.notes ? ' <span class="hasnote">•</span>' : '') + '</div>' +
-        '<div class="rsub">' + esc(t.client) + (t.client && t.month ? ' · ' : '') + esc(fmtMonth(t.month)) + '</div>' +
+        '<div class="rsub">' + esc(t.client) +
+          (!view.month && t.month ? (t.client ? ' · ' : '') + esc(fmtMonth(t.month)) : '') + '</div>' +
       '</div>' +
       '<div class="rmoney">' +
         '<div class="rcost">' + (t.cost > 0 ? esc(money(t.cost, t.currency)) : '—') + '</div>' +
@@ -305,7 +350,7 @@ function openModal(t) {
   $('#fTask').value     = t ? t.task : '';
   $('#fClient').value   = t ? t.client : '';
   $('#fStatus').value   = t ? t.status : 'new';
-  $('#fMonth').value    = t ? t.month : thisMonth();
+  $('#fMonth').value    = t ? t.month : (view.month || thisMonth());
   $('#fCreated').value  = t ? t.created : today();
   $('#fDeadline').value = t ? t.deadline : '';
   $('#fCost').value     = t && t.cost ? t.cost : '';
@@ -376,7 +421,7 @@ function loadFile(file) {
     state.tasks = s.tasks;
     if (d.lang === 'uk' || d.lang === 'ru') state.lang = d.lang;
     openIds = {};
-    save(); applyLang(); render();
+    save(); applyLang(); initView(); render();
     toast(T.loaded + s.tasks.length);
   };
   fr.readAsText(file);
@@ -410,7 +455,7 @@ $('#lang').addEventListener('click', () => {
 });
 $('#add').addEventListener('click', () => openModal(null));
 $('#q').addEventListener('input', renderList);
-['#fclient', '#fmonth', '#fstatus', '#fpay', '#group'].forEach(s =>
+['#fclient', '#fstatus', '#fpay', '#group'].forEach(s =>
   $(s).addEventListener('change', renderList));
 $('#exportCsv').addEventListener('click', exportCsv);
 $('#backup').addEventListener('click', backup);
@@ -441,6 +486,20 @@ $('#list').addEventListener('click', e => {
   if (act === 'done')   { t.status = 'done'; save(); render(); return; }
   if (act === 'paid')   { t.paid = t.cost; save(); render(); return; }
 });
+
+$('#months').addEventListener('click', e => {
+  const b = e.target.closest('.mo'); if (!b) return;
+  view.month = b.getAttribute('data-m');
+  render();
+});
+$('#mprev').addEventListener('click', () => stepMonth(-1));
+$('#mnext').addEventListener('click', () => stepMonth(1));
+$('#mtoday').addEventListener('click', () => {
+  const d = new Date();
+  view.year = d.getFullYear(); view.month = thisMonth(); render();
+});
+$('#yprev').addEventListener('click', () => { view.year--; if (view.month) view.month = view.year + view.month.slice(4); render(); });
+$('#ynext').addEventListener('click', () => { view.year++; if (view.month) view.month = view.year + view.month.slice(4); render(); });
 
 /* ---------- данные из ссылки ---------- */
 
@@ -478,6 +537,7 @@ async function fromHash() {
 
 applyTheme();
 applyLang();
+initView();
 render();
-fromHash().then(ok => { if (ok) { applyLang(); render(); } });
+fromHash().then(ok => { if (ok) { applyLang(); initView(); render(); } });
 })();

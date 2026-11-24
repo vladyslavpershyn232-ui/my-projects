@@ -6,7 +6,7 @@
 <title>Мои проекты</title>
 <meta name="description" content="Учёт задач, клиентов и денег.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='85'>◆</text></svg>">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -24,6 +24,24 @@
     </div>
   </header>
 
+  <section class="card monthbar">
+    <div class="mbtop">
+      <div class="mbnav">
+        <button type="button" class="navbtn" id="mprev" aria-label="&lt;">&#8249;</button>
+        <h2 id="mlabel">—</h2>
+        <button type="button" class="navbtn" id="mnext" aria-label="&gt;">&#8250;</button>
+        <button type="button" class="btn sm" id="mtoday" data-t="todayBtn">Сегодня</button>
+      </div>
+      <div class="mbnav">
+        <button type="button" class="navbtn" id="yprev" aria-label="&larr;">&#8592;</button>
+        <span class="yl" id="ylabel">2026</span>
+        <button type="button" class="navbtn" id="ynext" aria-label="&rarr;">&#8594;</button>
+      </div>
+    </div>
+    <div class="months" id="months"></div>
+    <p class="sub mbhint" data-t="mbHint">У каждого месяца свой список задач. Переключайте месяцы, чтобы посмотреть архив.</p>
+  </section>
+
   <section class="tiles" id="tiles"></section>
 
   <section class="card toolbar">
@@ -33,7 +51,6 @@
     </div>
     <div class="toolrow">
       <select id="fclient" class="inp"></select>
-      <select id="fmonth" class="inp"></select>
       <select id="fstatus" class="inp"></select>
       <select id="fpay" class="inp"></select>
       <select id="group" class="inp"></select>
@@ -103,7 +120,7 @@
   </div>
 </div>
 
-<script src="i18n.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="i18n.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
