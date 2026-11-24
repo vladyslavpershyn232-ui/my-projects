@@ -267,6 +267,12 @@ function rowHtml(t) {
         '<div class="rcost">' + (t.cost > 0 ? esc(money(t.cost, t.currency)) : '—') + '</div>' +
         pay +
       '</div>' +
+      '<div class="rquick">' +
+        (ps !== 'yes' && t.cost > 0
+          ? '<button type="button" class="qbtn" data-act="paid" title="' + esc(T.markPaid) + '">' +
+            '<span class="qi">\u2713</span><span class="qt">' + esc(T.qPaid) + '</span></button>'
+          : '<span class="qdone">\u2713</span>') +
+      '</div>' +
     '</div>' +
     (open ? '<div class="rbody">' +
       (t.notes ? '<p class="rnote">' + esc(t.notes) + '</p>' : '') +
@@ -371,9 +377,21 @@ function loadFile(file) {
     if (d.lang === 'uk' || d.lang === 'ru') state.lang = d.lang;
     openIds = {};
     save(); applyLang(); render();
-    alert(T.loaded + s.tasks.length);
+    toast(T.loaded + s.tasks.length);
   };
   fr.readAsText(file);
+}
+function toast(text) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast'; el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('on'), 3500);
 }
 function download(blob, name) {
   const a = document.createElement('a');
@@ -424,9 +442,42 @@ $('#list').addEventListener('click', e => {
   if (act === 'paid')   { t.paid = t.cost; save(); render(); return; }
 });
 
+/* ---------- данные из ссылки ---------- */
+
+async function fromHash() {
+  const h = location.hash || '';
+  if (h.indexOf('#data=') !== 0) return false;
+  let payload = h.slice(6), gz = false;
+  if (payload.slice(0, 2) === 'z.') { gz = true; payload = payload.slice(2); }
+  let json;
+  try {
+    const bin = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    if (gz) {
+      const ds = new DecompressionStream('gzip');
+      const buf = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+      json = new TextDecoder().decode(buf);
+    } else {
+      json = new TextDecoder().decode(bytes);
+    }
+  } catch (e) { return false; }
+
+  let s;
+  try { s = fromAny(JSON.parse(json)); } catch (e) { return false; }
+  if (!s) return false;
+
+  history.replaceState(null, '', location.pathname + location.search);
+  if (state.tasks.length && !confirm(T.confirmLoad)) return false;
+  state.tasks = s.tasks;
+  save();
+  setTimeout(() => toast(T.loaded + s.tasks.length), 50);
+  return true;
+}
+
 /* ---------- старт ---------- */
 
 applyTheme();
 applyLang();
 render();
+fromHash().then(ok => { if (ok) { applyLang(); render(); } });
 })();
